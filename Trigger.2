@@ -1,0 +1,237 @@
+1.
+
+CREATE DATABASE BankingDB;
+USE BankingDB;
+
+CREATE TABLE Accounts (
+    account_number INT PRIMARY KEY,
+    balance DECIMAL(12,2) NOT NULL
+);
+
+CREATE TABLE Transactions (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    account_number INT NOT NULL,
+    transaction_type VARCHAR(10),
+    amount DECIMAL(12,2),
+    transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (account_number)
+        REFERENCES Accounts(account_number)
+);
+
+CREATE TABLE Products (
+    product_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    stock_quantity INT NOT NULL
+);
+
+CREATE TABLE Sales (
+    sale_id INT PRIMARY KEY,
+    product_id INT NOT NULL,
+    quantity_sold INT NOT NULL,
+    sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id)
+        REFERENCES Products(product_id)
+);
+
+CREATE TABLE Departments (
+    dept_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    employee_count INT DEFAULT 0
+);
+
+CREATE TABLE Employees (
+    emp_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    salary DECIMAL(10,2) NOT NULL,
+    dept_id INT,
+    FOREIGN KEY (dept_id)
+        REFERENCES Departments(dept_id)
+);
+
+CREATE TABLE Students (
+    student_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    marks DECIMAL(5,2) NOT NULL
+);
+
+
+2.
+DELIMITER //
+
+CREATE TRIGGER account_update_trigger
+AFTER UPDATE ON Accounts
+FOR EACH ROW
+BEGIN
+    IF NEW.balance > OLD.balance THEN
+        INSERT INTO Transactions
+            (account_number, transaction_type, amount, transaction_date)
+        VALUES
+            (NEW.account_number, 'CREDIT',
+             ABS(NEW.balance - OLD.balance), CURRENT_TIMESTAMP);
+
+    ELSEIF NEW.balance < OLD.balance THEN
+        INSERT INTO Transactions
+            (account_number, transaction_type, amount, transaction_date)
+        VALUES
+            (NEW.account_number, 'DEBIT',
+             ABS(NEW.balance - OLD.balance), CURRENT_TIMESTAMP);
+    END IF;
+END //
+
+DELIMITER ;
+
+3.
+DELIMITER //
+
+CREATE TRIGGER sales_insert_trigger
+AFTER INSERT ON Sales
+FOR EACH ROW
+BEGIN
+    UPDATE Products
+    SET stock_quantity = stock_quantity - NEW.quantity_sold
+    WHERE product_id = NEW.product_id;
+END //
+
+DELIMITER ;
+
+4.
+DELIMITER //
+
+CREATE TRIGGER salary_validation_trigger
+BEFORE UPDATE ON Employees
+FOR EACH ROW
+BEGIN
+    IF NEW.salary <= 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Salary must be greater than zero';
+    END IF;
+END //
+
+DELIMITER ;
+
+5.
+DELIMITER //
+
+CREATE TRIGGER marks_validation_trigger
+BEFORE INSERT ON Students
+FOR EACH ROW
+BEGIN
+    IF NEW.marks < 0 OR NEW.marks > 100 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Marks must be between 0 and 100';
+    END IF;
+END //
+
+DELIMITER ;
+
+6.
+DELIMITER //
+
+CREATE TRIGGER employee_insert_trigger
+AFTER INSERT ON Employees
+FOR EACH ROW
+BEGIN
+    UPDATE Departments
+    SET employee_count = employee_count + 1
+    WHERE dept_id = NEW.dept_id;
+END //
+
+DELIMITER ;
+
+7.
+DELIMITER //
+
+CREATE TRIGGER employee_delete_trigger
+AFTER DELETE ON Employees
+FOR EACH ROW
+BEGIN
+    UPDATE Departments
+    SET employee_count = employee_count - 1
+    WHERE dept_id = OLD.dept_id;
+END //
+
+DELIMITER ;
+
+8.
+INSERT INTO Accounts VALUES
+(1001,5000),(1002,6000),(1003,7000),
+(1004,8000),(1005,9000),(1006,4500),
+(1007,5500),(1008,6500),(1009,7500),
+(1010,8500),(1011,9500),(1012,3000),
+(1013,4000),(1014,5000),(1015,6000);
+
+INSERT INTO Products VALUES
+(1,'Laptop',50),(2,'Mouse',200),(3,'Keyboard',150),
+(4,'Monitor',75),(5,'Printer',40),(6,'Scanner',30),
+(7,'Tablet',60),(8,'Phone',100),(9,'Headphones',120),
+(10,'Speaker',80),(11,'Webcam',90),(12,'Router',70),
+(13,'USB Drive',300),(14,'Hard Disk',65),(15,'Power Bank',110);
+
+INSERT INTO Departments VALUES
+(1,'HR',0),(2,'Finance',0),(3,'IT',0),
+(4,'Sales',0),(5,'Marketing',0),(6,'Production',0),
+(7,'Research',0),(8,'Support',0),(9,'Logistics',0),
+(10,'Administration',0),(11,'Security',0),
+(12,'Quality Control',0),(13,'Operations',0),
+(14,'Training',0),(15,'Procurement',0);
+
+INSERT INTO Employees VALUES
+(1,'Arun',30000,1),(2,'Bala',35000,2),
+(3,'Charan',40000,3),(4,'Divya',32000,4),
+(5,'Esha',45000,5),(6,'Farhan',38000,6),
+(7,'Geetha',42000,7),(8,'Hari',31000,8),
+(9,'Indu',36000,9),(10,'Jay',50000,10),
+(11,'Kiran',33000,11),(12,'Lakshmi',47000,12),
+(13,'Manoj',39000,13),(14,'Nisha',34000,14),
+(15,'Praveen',44000,15);
+
+INSERT INTO Students VALUES
+(1,'Akhil',85),(2,'Bhavya',92),(3,'Chandu',76),
+(4,'Deepa',88),(5,'Eswar',67),(6,'Farida',95),
+(7,'Gopal',73),(8,'Harini',81),(9,'Ishaan',90),
+(10,'Jyothi',78),(11,'Karthik',84),(12,'Lavanya',69),
+(13,'Mohan',97),(14,'Neha',72),(15,'Prasad',89);
+
+INSERT INTO Sales (sale_id, product_id, quantity_sold) VALUES
+(1,1,2),(2,2,5),(3,3,3),(4,4,2),(5,5,1),
+(6,6,2),(7,7,4),(8,8,3),(9,9,6),(10,10,2),
+(11,11,5),(12,12,3),(13,13,10),(14,14,2),(15,15,4);
+
+9.
+-- Account balance increases: CREDIT
+UPDATE Accounts
+SET balance = 6000
+WHERE account_number = 1001;
+
+-- Account balance decreases: DEBIT
+UPDATE Accounts
+SET balance = 5500
+WHERE account_number = 1002;
+
+SELECT * FROM Transactions;
+
+-- Check stock changes
+SELECT * FROM Products;
+
+-- Invalid salary: should raise an error
+UPDATE Employees
+SET salary = -1000
+WHERE emp_id = 1;
+
+-- Invalid marks: should raise an error
+INSERT INTO Students
+VALUES (16, 'Test Student', 120);
+
+-- Check department employee counts
+SELECT * FROM Departments;
+
+-- Insert employee: count increases
+INSERT INTO Employees
+VALUES (16, 'Rahul', 40000, 1);
+
+SELECT * FROM Departments WHERE dept_id = 1;
+
+-- Delete employee: count decreases
+DELETE FROM Employees WHERE emp_id = 16;
+
+SELECT * FROM Departments WHERE dept_id = 1;
